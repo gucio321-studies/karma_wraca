@@ -1,15 +1,12 @@
 import serial
 import time
-
 import matplotlib.pyplot as plt
-import time
 import numpy as np
 
 # Ustawienia portu szeregowego - ZMIEŃ PORT NA TEN UŻYWANY PRZEZ KONWERTER RS-232/USB
 # Przykład: 'COM5' (Windows) lub '/dev/ttyUSB1' (Linux/macOS)
 PORT_SCALE = 'COM3'  
-BAUD_RATE = 9600 # Upewnij się, że to pasuje do ustawień Twojej wagi BS600M!
-
+BAUD_RATE = 9600  # Upewnij się, że to pasuje do ustawień Twojej wagi BS600M!
 
 def parse_weight(raw_line):
     """
@@ -18,101 +15,126 @@ def parse_weight(raw_line):
     """
     # 1. Usuń białe znaki z początku i końca.
     cleaned = raw_line.strip()
-    
+   
     # Przykładowy format BS600M: 'WTST+ 0.00 g'
     # 2. Rozdziel ciąg na słowa (elementy)
     parts = cleaned.split()
-    
+   
     # 3. Sprawdź, czy mamy oczekiwaną liczbę elementów (np. 3 lub 4)
-    if len(parts) >= 2 and ('g' in parts or 'kg' in parts):
+    if len(parts) >= 2:
         try:
-            # 4. Spróbuj przekształcić drugi element (lub ten, który jest masą) na float.
-            # Musimy znaleźć element, który jest masą. W tym formacie to prawdopodobnie trzeci element
-            # po "WTST" i fladze (+/-). Spróbujmy znaleźć wartość, która jest liczbą:
+            # 4. Spróbuj przekształcić elementy na float.
+            # Znajdź element, który jest liczbą (z kropką dziesiętną)
             for part in parts:
+                # Usuń ewentualne jednostki (g, kg) z końca
+                part_clean = part.replace('g', '').replace('kg', '').strip()
                 try:
-                    weight_value = float(part)
+                    weight_value = float(part_clean)
                     return weight_value
                 except ValueError:
-                    continue # To nie była liczba, idziemy dalej
+                    continue  # To nie była liczba, idziemy dalej
         except Exception as e:
             print(f"Błąd parsowania: {e} dla linii: {raw_line}")
-            return None # W przypadku błędu zwracamy None
-            
-    return None # Zwróć None, jeśli format się nie zgadza        
-
+            return None
+    
+    return None
 
 def send_command(ser_connection, command_string):
     """Wysyła komendę do wagi przez port szeregowy."""
-    # Polecenie musi być zakodowane na bajty (bytes) przed wysłaniem!
-    # Używamy .encode('ascii') dla komend szeregowych
     command_bytes = command_string.encode('ascii')
-    
-    # Wysyłanie
     ser_connection.write(command_bytes)
     print(f"\n--- Wysłano komendę: {repr(command_string)} ---")
-    
-# Funkcja tarująca (zerująca)
+
 def tare_scale(ser_connection):
     """Wysyła typową komendę Tarowania (np. 'T' z końcem linii)."""
     # Zastąp 'T\r\n' poprawnym poleceniem z manuala BS600M
-    TARE_COMMAND = "T\r\n" 
+    TARE_COMMAND = "T\r\n"
     send_command(ser_connection, TARE_COMMAND)
 
 try:
     # Inicjalizacja połączenia szeregowego
-    # Timeout=1 oznacza, że skrypt poczeka sekundę na dane, zanim przejdzie dalej
-    ser = serial.Serial(PORT_SCALE, BAUD_RATE, timeout=1) 
-    print(f"Pomyślnie połączono z wagą przez port {PORT_SCALE} przy {BAUD_RATE} bps.")
-    time.sleep(2) # Czekamy, aż port się ustabilizuje
-
-    print("\n--- Rozpoczynanie nasłuchiwania danych bezpośrednio z wagi ---\n")
-
+    ser = serial.Serial(PORT_SCALE, BAUD_RATE, timeout=1)
+    print(f"Połączono z {PORT_SCALE} przy {BAUD_RATE} baud")
     
+    # Inicjalizacja wykresu
     plt.ion() 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10, 6))
     x_data, y_data = [], []
-    line, = ax.plot(x_data, y_data) # Pobieramy referencję do obiektu linii
+    line, = ax.plot(x_data, y_data, 'b-', linewidth=2) 
     
-    dt = 0
-    while True:
-        start = time.time()
-        # Odczyt linii danych (aż do znaku końca linii \n),
-        # dekodowanie na tekst i usunięcie białych znaków (m.in. \r)
+    # Ustawienia osi
+    ax.set_xlim(0, 30)
+    ax.set_ylim(-0.1, 1.0)
+    ax.set_xlabel("Czas [s]", fontsize=12)
+    ax.set_ylabel("Masa [g]", fontsize=12)
+    ax.grid(True, alpha=0.3)
+    ax.set_title("Pomiar masy w czasie rzeczywistym", fontsize=14)
+    
+    start_time = time.time()
+    last_draw_time = start_time
+    DRAW_INTERVAL = 0.1  # Rysuj wykres co 100 ms
+    
+    print("Rozpoczynam odczyt danych...")
+    print("Naciśnij Ctrl+C aby zatrzymać")
+
+    while True:    
+        current_time = time.time()
+        
+        # Sprawdź czy są dane do odczytu
         if ser.in_waiting > 0:
-            raw_line = ser.readline().decode('utf-8').strip()
-            
-            # Wypisanie odebranego sygnału
-            print(f"Surowy pakiet z wagi: {raw_line}")
-            
-            # Możesz tutaj dodać kod do parsowania (wyciągania) wartości masy,
-            # tak jak robiliśmy to na Arduino
-            
+            try:
+                # Odczytaj linię (zakładając, że waga wysyła dane zakończone znakiem nowej linii)
+                raw_bytes = ser.readline()
+                raw_line = raw_bytes.decode('utf-8', errors='ignore').strip()
+                
+                if raw_line:  # Sprawdź czy linia nie jest pusta
+                    # Wypisanie odebranego sygnału
+                    print(f"Odebrano: {repr(raw_line)}")
+                    
+                    # Parsowanie wagi
+                    weight = parse_weight(raw_line)
+                    
+                    if weight is not None:
+                        # Dodanie nowych danych
+                        elapsed_time = current_time - start_time
+                        x_data.append(elapsed_time)
+                        y_data.append(weight)
+                        print(f"Czas: {elapsed_time:.2f}s, Masa: {weight:.2f}g")
+                    else:
+                        print(f"Nie udało się sparsować linii: {raw_line}")
+            except Exception as e:
+                print(f"Błąd odczytu: {e}")
+        
+        # Aktualizacja wykresu co określony interwał
+        if current_time - last_draw_time > DRAW_INTERVAL:
+            if len(x_data) > 0:
+                # Aktualizacja danych na wykresie
+                line.set_xdata(x_data)
+                line.set_ydata(y_data)
+                
+                # Dynamiczne ustawienie zakresu osi X (ostatnie 30 sekund)
+                if x_data[-1] > 30:
+                    min_x = x_data[-1] - 30
+                    ax.set_xlim(min_x, x_data[-1] + 0.5)
+                else:
+                    ax.set_xlim(0, 30)
+                
+                # Dynamiczne ustawienie zakresu osi Y z marginesem
+                if len(y_data) > 0:
+                    y_min = min(y_data) if min(y_data) < 0 else 0
+                    y_max = max(y_data) if max(y_data) > 0 else 1.0
+                    margin = (y_max - y_min) * 0.1
+                    ax.set_ylim(y_min - margin, y_max + margin)
+                
+                # Rysowanie i odświeżanie
+                fig.canvas.draw()
+                fig.canvas.flush_events()
+                
+                last_draw_time = current_time
+        
+        # Krótka pauza aby nie przeciążyć CPU
+        time.sleep(0.001)
 
-            # Generowanie nowych danych
-            x_data.append(dt)
-            weight = parse_weight(raw_line)
-            print(weight)
-            y_data.append(weight)
-
-            # Wystarczy zaktualizować dane istniejącej linii!
-            line.set_xdata(x_data)
-            line.set_ydata(y_data)
-
-            # Automatycznie dostosowujemy osie do nowych danych
-            ax.relim()
-            ax.autoscale_view()
-
-            # Rysujemy nową klatkę i wymuszamy odświeżenie
-            fig.canvas.draw()
-            fig.canvas.flush_events() 
-            end = time.time()
-             
-            dt += 1/BAUD_RATE+end-start
-            time.sleep(1/BAUD_RATE)
-            
-
-            
 except serial.SerialException as e:
     print(f"Błąd połączenia szeregowego: {e}")
     print("Sprawdź numer portu, baud rate oraz czy konwerter jest poprawnie podłączony i ma sterowniki.")
@@ -120,11 +142,27 @@ except serial.SerialException as e:
 except KeyboardInterrupt:
     print("\nZatrzymanie skryptu przez użytkownika.")
 
+except Exception as e:
+    print(f"Nieoczekiwany błąd: {e}")
+
 finally:
+    # Zamknięcie połączenia i wykresu
     if 'ser' in locals() and ser.is_open:
         ser.close()
-        plt.ioff()
         print("Połączenie szeregowe zostało zamknięte.")
-        
-
     
+    plt.ioff()
+    
+    # Zapisz dane do pliku przed zamknięciem
+    if len(x_data) > 0:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        filename = f"pomiary_wagi_{timestamp}.txt"
+        with open(filename, 'w') as f:
+            f.write("Czas[s]\tMasa[g]\n")
+            for x, y in zip(x_data, y_data):
+                f.write(f"{x:.3f}\t{y:.3f}\n")
+        print(f"Dane zapisane do {filename}")
+    
+    # Pokaż końcowy wykres
+    if len(x_data) > 0:
+        plt.show(block=True)
