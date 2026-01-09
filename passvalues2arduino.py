@@ -3,7 +3,7 @@ import time
 import sys
 
 class ScaleToArduino:
-    def __init__(self, scale_port='COM3', arduino_port='COM6'):
+    def __init__(self, scale_port='COM3', arduino_port='COM7'):
         """Inicjalizacja połączeń z wagą i Arduino"""
         self.scale_port = scale_port
         self.arduino_port = arduino_port
@@ -62,6 +62,8 @@ class ScaleToArduino:
             self.arduino_ser.write(command.encode('utf-8'))
             print(f"Wysłano do Arduino: {command.strip()}")
             
+            
+            
             # Odczytaj odpowiedź z Arduino
             if self.arduino_ser.in_waiting:
                 response = self.arduino_ser.readline().decode('utf-8', errors='ignore').strip()
@@ -75,10 +77,14 @@ class ScaleToArduino:
         
         try:
             while True:
+                print("czeka")
                 # 1. Odczytaj dane z wagi
                 if self.scale_ser.in_waiting:
+                    print("na co czekasz")
                     raw_data = self.scale_ser.readline()
+                    print("nato?")
                     weight, raw_str = self.parse_scale_data(raw_data)
+                    print("aha")
                     
                     if weight is not None:
                         print(f"Waga: {weight:.2f} g (raw: {raw_str})")
@@ -87,14 +93,12 @@ class ScaleToArduino:
                         self.send_to_arduino(weight)
                 
                 # 3. Sprawdź komendy użytkownika
-                
+                print("wtf")
                 self.scale_ser.write(b'T\r\n')
                     
                 
         except KeyboardInterrupt:
             print("\nPrzerwano przez użytkownika")
-        finally:
-            self.close()
     
     def close(self):
         """Zamknij połączenia"""
@@ -109,6 +113,6 @@ if __name__ == "__main__":
     # Ustaw swoje porty!
     transmitter = ScaleToArduino(
         scale_port='COM3',    # Port konwertera wagi
-        arduino_port='COM6'   # Port Arduino
+        arduino_port='COM7'   # Port Arduino
     )
     transmitter.run()

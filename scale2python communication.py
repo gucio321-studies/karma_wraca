@@ -39,6 +39,9 @@ def parse_weight(raw_line):
     
     return None
 
+
+
+
 def send_command(ser_connection, command_string):
     """Wysyła komendę do wagi przez port szeregowy."""
     command_bytes = command_string.encode('ascii')
@@ -72,7 +75,7 @@ try:
     
     start_time = time.time()
     last_draw_time = start_time
-    DRAW_INTERVAL = 0.1  # Rysuj wykres co 100 ms
+    DRAW_INTERVAL = 3  # Rysuj wykres co 100 ms
     
     print("Rozpoczynam odczyt danych...")
     print("Naciśnij Ctrl+C aby zatrzymać")
@@ -133,7 +136,7 @@ try:
                 last_draw_time = current_time
         
         # Krótka pauza aby nie przeciążyć CPU
-        time.sleep(0.001)
+        time.sleep(0.01)
 
 except serial.SerialException as e:
     print(f"Błąd połączenia szeregowego: {e}")
