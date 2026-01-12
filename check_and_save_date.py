@@ -13,6 +13,13 @@ from PySide6.QtCore import QTimer, Qt, Signal, QObject
 from PySide6.QtGui import QFont
 import serial
 import serial.tools.list_ports
+import passvalues2arduino
+
+
+#transmitter = passvalues2arduino.ScaleToArduino(
+#        scale_port='COM1',    # Port konwertera wagi
+#        arduino_port='COM14'   # Port Arduino
+#    )
 
 
 class SerialWorker(QObject):
@@ -268,6 +275,13 @@ class ArduinoSchedulerApp(QMainWindow):
         for time_str in sorted(self.scheduled_times):
             if time_str == current_time:
                 item = QListWidgetItem(f"{time_str} - AKTYWNE TERAZ")
+                
+                #transmitter = passvalues2arduino.ScaleToArduino(
+                #        scale_port='COM1',    # Port konwertera wagi
+                #        arduino_port='COM14'   # Port Arduino
+                #    )
+
+                #transmitter.run()
                 item.setBackground(Qt.green)
             else:
                 item = QListWidgetItem(f"{time_str} - Oczekuje")
@@ -276,6 +290,8 @@ class ArduinoSchedulerApp(QMainWindow):
     def update_current_time(self):
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.current_time_label.setText(f"Aktualny czas: {current_time}")
+
+        
         
     def check_scheduled_times(self):
         if not self.scheduled_times or not self.serial_worker.is_connected:

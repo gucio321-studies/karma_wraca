@@ -2,13 +2,28 @@ import serial
 import time
 import matplotlib.pyplot as plt
 import numpy as np
-
+from pathlib import Path
+import datetime
 # Ustawienia portu szeregowego - ZMIEŃ PORT NA TEN UŻYWANY PRZEZ KONWERTER RS-232/USB
 # Przykład: 'COM5' (Windows) lub '/dev/ttyUSB1' (Linux/macOS)
-PORT_SCALE = 'COM3'  
+
+path = Path(__file__).parent
+
+PORT_SCALE = 'COM1'  
 BAUD_RATE = 9600  # Upewnij się, że to pasuje do ustawień Twojej wagi BS600M!
 
+
+
+
+
+
+
+
+
 def parse_weight(raw_line):
+    
+    return np.random.randint(1, 100) #TODO Test żeby sprawdzić czy będzie działać
+
     """
     Parsuje surowy ciąg znaków z wagi (np. 'WTST+   0.00  g')
     i zwraca wartość masy jako liczbę float.
@@ -40,8 +55,7 @@ def parse_weight(raw_line):
     return None
 
 
-
-
+    
 def send_command(ser_connection, command_string):
     """Wysyła komendę do wagi przez port szeregowy."""
     command_bytes = command_string.encode('ascii')
@@ -56,17 +70,20 @@ def tare_scale(ser_connection):
 
 try:
     # Inicjalizacja połączenia szeregowego
-    ser = serial.Serial(PORT_SCALE, BAUD_RATE, timeout=1)
+    #ser = serial.Serial(PORT_SCALE, BAUD_RATE, timeout=1)
     print(f"Połączono z {PORT_SCALE} przy {BAUD_RATE} baud")
     
     # Inicjalizacja wykresu
     plt.ion() 
     fig, ax = plt.subplots(figsize=(10, 6))
     x_data, y_data = [], []
+    seconds_data = []
     line, = ax.plot(x_data, y_data, 'b-', linewidth=2) 
     
+    start_date = datetime.datetime.now()
+    limit_date = start_date + datetime.timedelta(seconds=30)
     # Ustawienia osi
-    ax.set_xlim(0, 30)
+    ax.set_xlim(start_date, start_date + datetime.timedelta(seconds=30))
     ax.set_ylim(-0.1, 1.0)
     ax.set_xlabel("Czas [s]", fontsize=12)
     ax.set_ylabel("Masa [g]", fontsize=12)
@@ -75,34 +92,38 @@ try:
     
     start_time = time.time()
     last_draw_time = start_time
-    DRAW_INTERVAL = 3  # Rysuj wykres co 100 ms
+    DRAW_INTERVAL = 3  # Rysuj wykres co 3 sekundy
     
     print("Rozpoczynam odczyt danych...")
     print("Naciśnij Ctrl+C aby zatrzymać")
 
     while True:    
         current_time = time.time()
+    
         
         # Sprawdź czy są dane do odczytu
-        if ser.in_waiting > 0:
+        if 1: #TODO Zastąpić ser.in_waiting > 0
             try:
                 # Odczytaj linię (zakładając, że waga wysyła dane zakończone znakiem nowej linii)
-                raw_bytes = ser.readline()
-                raw_line = raw_bytes.decode('utf-8', errors='ignore').strip()
+                #raw_bytes = ser.readline()
+                #raw_line = raw_bytes.decode('utf-8', errors='ignore').strip()
                 
-                if raw_line:  # Sprawdź czy linia nie jest pusta
+                if 1:  #TODO zastąpić "raw_line"
                     # Wypisanie odebranego sygnału
-                    print(f"Odebrano: {repr(raw_line)}")
-                    
+                    #print(f"Odebrano: {repr(raw_line)}")
+                    raw_line = "WTST+ 0.00 g" #TODO usunąć
                     # Parsowanie wagi
                     weight = parse_weight(raw_line)
                     
                     if weight is not None:
                         # Dodanie nowych danych
                         elapsed_time = current_time - start_time
-                        x_data.append(elapsed_time)
+                        current_date = start_date + datetime.timedelta(seconds=elapsed_time) #Raczej nie powinno być więcej niż
+                        x_data.append(current_date)
                         y_data.append(weight)
+                        seconds_data.append(elapsed_time)
                         print(f"Czas: {elapsed_time:.2f}s, Masa: {weight:.2f}g")
+                        print(f"data: {current_date}")
                     else:
                         print(f"Nie udało się sparsować linii: {raw_line}")
             except Exception as e:
@@ -110,17 +131,17 @@ try:
         
         # Aktualizacja wykresu co określony interwał
         if current_time - last_draw_time > DRAW_INTERVAL:
-            if len(x_data) > 0:
+            if len(seconds_data) > 0:
                 # Aktualizacja danych na wykresie
                 line.set_xdata(x_data)
                 line.set_ydata(y_data)
                 
                 # Dynamiczne ustawienie zakresu osi X (ostatnie 30 sekund)
-                if x_data[-1] > 30:
-                    min_x = x_data[-1] - 30
-                    ax.set_xlim(min_x, x_data[-1] + 0.5)
+                if seconds_data[-1] > 30:
+                    min_x = x_data[-1] - datetime.timedelta(seconds=30) #TODO ogarnąć zakres
+                    ax.set_xlim(min_x, x_data[-1]) 
                 else:
-                    ax.set_xlim(0, 30)
+                    ax.set_xlim(start_date, start_date + datetime.timedelta(seconds=30))
                 
                 # Dynamiczne ustawienie zakresu osi Y z marginesem
                 if len(y_data) > 0:
@@ -134,8 +155,8 @@ try:
                 fig.canvas.flush_events()
                 
                 last_draw_time = current_time
-        
-        # Krótka pauza aby nie przeciążyć CPU
+    
+         #Krótka pauza aby nie przeciążyć CPU
         time.sleep(0.01)
 
 except serial.SerialException as e:
@@ -145,8 +166,6 @@ except serial.SerialException as e:
 except KeyboardInterrupt:
     print("\nZatrzymanie skryptu przez użytkownika.")
 
-except Exception as e:
-    print(f"Nieoczekiwany błąd: {e}")
 
 finally:
     # Zamknięcie połączenia i wykresu
@@ -159,7 +178,7 @@ finally:
     # Zapisz dane do pliku przed zamknięciem
     if len(x_data) > 0:
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = f"pomiary_wagi_{timestamp}.txt"
+        filename = path / "pomiary" / f"pomiary_wagi_{timestamp}.txt"
         with open(filename, 'w') as f:
             f.write("Czas[s]\tMasa[g]\n")
             for x, y in zip(x_data, y_data):
