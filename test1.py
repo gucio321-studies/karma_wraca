@@ -290,7 +290,6 @@ class ArduinoSchedulerApp(QMainWindow):
         
         # Log do konsoli GUI
         message = f"TRIGGER:{time_str} | CEL: {target_val}{unit}"
-        self.serial_worker.send_message(message)
         
         # ODKOMENTUJ W PRODUKCJI:
         # transmitter = passvalues2arduino.ScaleToArduino(
