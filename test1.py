@@ -83,7 +83,6 @@ class SerialWorker(QObject):
 
             while True:
                 if not self.serial_connection.in_waiting > 0:
-                    print("no data")
                     continue
                 response = self.serial_connection.readline().decode(errors='replace').strip()
                 # if doesn't start with // - return
@@ -355,6 +354,7 @@ class ArduinoSchedulerApp(QMainWindow):
 
     def extrude(self):
         print("Implement me!")
+        self.serial_worker.send_message("EXTRUDE")
 
     def closeEvent(self, event):
         if len(self.x_data) > 0:
